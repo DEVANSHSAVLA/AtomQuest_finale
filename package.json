@@ -1,0 +1,21 @@
+{
+  "name": "supportstream-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api",
+    "services/media-server",
+    "packages/shared-types"
+  ],
+  "scripts": {
+    "install-all": "npm install",
+    "dev:api": "npm run start:dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:media": "npm run start:dev --workspace=services/media-server",
+    "build:all": "npm run build --workspaces",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:media\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

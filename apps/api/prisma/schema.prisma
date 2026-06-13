@@ -1,0 +1,331 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  AGENT
+  CUSTOMER
+}
+
+enum SessionState {
+  CREATED
+  WAITING
+  ACTIVE
+  RECORDING
+  AGENT_DISCONNECTED
+  CUSTOMER_DISCONNECTED
+  RECONNECTING
+  ENDED
+  ABANDONED
+}
+
+enum RecordingStatus {
+  RECORDING
+  PROCESSING
+  AVAILABLE
+  FAILED
+}
+
+enum AuditAction {
+  LOGIN
+  SESSION_CREATED
+  SESSION_JOINED
+  RECORDING_STARTED
+  RECORDING_STOPPED
+  FILE_UPLOADED
+  SESSION_ENDED
+  INVITE_CREATED
+  INVITE_REGENERATED
+  INVITE_REVOKED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  displayName  String
+  role         Role          @default(AGENT)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     Session[]     @relation("CreatedSessions")
+  participants Participant[]
+  auditLogs    AuditLog[]
+}
+
+enum SupportCategory {
+  TECHNICAL_SUPPORT
+  BILLING
+  ACCOUNT_RECOVERY
+  INSTALLATION
+  PRODUCT_DEMO
+  ESCALATION
+}
+
+enum ResolutionStatus {
+  RESOLVED
+  PARTIALLY_RESOLVED
+  ESCALATED
+  NO_RESPONSE
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Department {
+  TECHNICAL_SUPPORT
+  BILLING
+  ACCOUNT_RECOVERY
+  SALES
+  ESCALATIONS
+}
+
+enum WebhookStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model TicketSequence {
+  id      Int @id @default(1)
+  current Int @default(0)
+}
+
+model CustomerProfile {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  displayName  String
+  company      String?
+  phone        String?
+  notes        String?
+  slackUser    String?
+  salesforceId String?
+  hubspotId    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model WebhookEvent {
+  id           String        @id @default(uuid())
+  event        String
+  payload      String
+  attempts     Int           @default(0)
+  status       WebhookStatus @default(PENDING)
+  responseCode Int?
+  lastAttempt  DateTime?
+  createdAt    DateTime      @default(now())
+}
+
+model IntegrationLog {
+  id        String   @id @default(uuid())
+  provider  String
+  action    String
+  status    String
+  errorMsg  String?
+  createdAt DateTime @default(now())
+}
+
+model WorkflowRule {
+  id        String   @id @default(uuid())
+  trigger   String
+  action    String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Session {
+  id                 String             @id @default(uuid())
+  ticketRef          String?            @unique
+  category           SupportCategory?
+  severity           IssueSeverity      @default(MEDIUM)
+  department         Department?
+  assignedAgentId    String?
+  assignedTeam       String?
+  title              String
+  description        String?
+  createdBy          String
+  creator            User               @relation("CreatedSessions", fields: [createdBy], references: [id])
+  status             SessionState       @default(CREATED)
+  startedAt          DateTime?
+  endedAt            DateTime?
+  agentNotes         String?
+  resolutionStatus   ResolutionStatus?
+  feedbackRating     Int?
+  feedbackResolved   Boolean?
+  feedbackComments   String?
+  sentiment          String             @default("NEUTRAL") // POSITIVE, NEUTRAL, NEGATIVE
+  escalatedAt        DateTime?
+  escalationReason   String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+  invites            Invite[]
+  messages           Message[]
+  files              File[]
+  recordings         Recording[]
+  timeline           Timeline[]
+  participants       Participant[]
+  analytics          SessionAnalytics?
+  summary            SessionSummary?
+  auditLogs          AuditLog[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Participant {
+  id          String    @id @default(uuid())
+  sessionId   String
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  displayName String
+  email       String?
+  role        Role
+  joinedAt    DateTime  @default(now())
+  leftAt      DateTime?
+  isConnected Boolean   @default(true)
+
+  @@index([sessionId])
+  @@index([email])
+}
+
+model Invite {
+  id           String        @id @default(uuid())
+  sessionId    String
+  session      Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  token        String        @unique
+  createdBy    String
+  isUsed       Boolean       @default(false)
+  isRevoked    Boolean       @default(false)
+  usedAt       DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime      @default(now())
+  
+  // Security Auditing Fields
+  createdIp    String?
+  usedIp       String?
+  joinAttempts Int           @default(0)
+}
+
+model Message {
+  id           String        @id @default(uuid())
+  sessionId    String
+  session      Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderId     String
+  senderName   String
+  senderRole   Role
+  content      String
+  createdAt    DateTime      @default(now())
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([sessionId, createdAt])
+}
+
+model File {
+  id           String        @id @default(uuid())
+  sessionId    String
+  session      Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  uploaderId   String
+  uploaderName String
+  originalName String
+  storageKey   String
+  mimeType     String
+  sizeBytes    Int
+  isScanned    Boolean       @default(false)
+  isSafe       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  deletedAt    DateTime?
+
+  @@index([sessionId])
+  @@index([deletedAt])
+}
+
+model Recording {
+  id              String          @id @default(uuid())
+  sessionId       String
+  session         Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  storageKey      String
+  playbackUrl     String
+  durationSeconds Int
+  sizeBytes       Int
+  status          RecordingStatus @default(RECORDING)
+  startedAt       DateTime        @default(now())
+  endedAt         DateTime?
+  createdAt       DateTime        @default(now())
+  deletedAt       DateTime?
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model SessionAnalytics {
+  id                 String   @id @default(uuid())
+  sessionId          String   @unique
+  session            Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  durationSec        Int      @default(0)
+  totalMessages      Int      @default(0)
+  totalFiles         Int      @default(0)
+  recordingBytes     BigInt   @default(0)
+  reconnectCount     Int      @default(0)
+  averageRttMs       Float    @default(0.0)
+  averagePacketLoss  Float    @default(0.0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model SessionSummary {
+  id            String   @id @default(uuid())
+  sessionId     String   @unique
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  durationSec   Int
+  participants  Json     // JSON structure mapping participants: [{ name, role }, ...]
+  totalMessages Int
+  totalFiles    Int
+  recordingUrl  String?
+  endedBy       String   // Name or ID of the user who ended the call
+  createdAt     DateTime @default(now())
+}
+
+model Timeline {
+  id          String         @id @default(uuid())
+  sessionId   String
+  session     Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  event       String         // e.g. "Joined", "Recording Started", "Disconnected", "Reconnected"
+  participant String         // Name/ID of participant triggering
+  timestamp   DateTime       @default(now())
+
+  @@index([sessionId, timestamp])
+}
+
+model AuditLog {
+  id        String           @id @default(uuid())
+  userId    String?
+  user      User?            @relation(fields: [userId], references: [id])
+  sessionId String?
+  session   Session?         @relation(fields: [sessionId], references: [id])
+  action    AuditAction
+  payload   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([createdAt])
+}
