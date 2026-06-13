@@ -306,6 +306,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     try {
       // Forward request to local media-server endpoint
+      console.log(`[Media Proxy] Forwarding action: ${payload.action} to ${this.mediaServerUrl}/api/v1/media`);
       const response = await fetch(`${this.mediaServerUrl}/api/v1/media`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -317,7 +318,9 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
         }),
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      console.log(`[Media Proxy] Received raw response text for action ${payload.action}:`, responseText);
+      const result = JSON.parse(responseText);
 
       if (payload.action === 'produce' && result.success) {
         const list = this.sessionProducers.get(sessionId) || [];

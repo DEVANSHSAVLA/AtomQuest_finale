@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -8,94 +8,18 @@ generator client {
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
-enum Role {
-  SUPER_ADMIN
-  ADMIN
-  AGENT
-  CUSTOMER
-}
-
-enum SessionState {
-  CREATED
-  WAITING
-  ACTIVE
-  RECORDING
-  AGENT_DISCONNECTED
-  CUSTOMER_DISCONNECTED
-  RECONNECTING
-  ENDED
-  ABANDONED
-}
-
-enum RecordingStatus {
-  RECORDING
-  PROCESSING
-  AVAILABLE
-  FAILED
-}
-
-enum AuditAction {
-  LOGIN
-  SESSION_CREATED
-  SESSION_JOINED
-  RECORDING_STARTED
-  RECORDING_STOPPED
-  FILE_UPLOADED
-  SESSION_ENDED
-  INVITE_CREATED
-  INVITE_REGENERATED
-  INVITE_REVOKED
-}
-
 model User {
   id           String        @id @default(uuid())
   email        String        @unique
   passwordHash String
   displayName  String
-  role         Role          @default(AGENT)
+  role         String        @default("AGENT")
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   sessions     Session[]     @relation("CreatedSessions")
   participants Participant[]
   auditLogs    AuditLog[]
-}
-
-enum SupportCategory {
-  TECHNICAL_SUPPORT
-  BILLING
-  ACCOUNT_RECOVERY
-  INSTALLATION
-  PRODUCT_DEMO
-  ESCALATION
-}
-
-enum ResolutionStatus {
-  RESOLVED
-  PARTIALLY_RESOLVED
-  ESCALATED
-  NO_RESPONSE
-}
-
-enum IssueSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-enum Department {
-  TECHNICAL_SUPPORT
-  BILLING
-  ACCOUNT_RECOVERY
-  SALES
-  ESCALATIONS
-}
-
-enum WebhookStatus {
-  PENDING
-  SENT
-  FAILED
 }
 
 model TicketSequence {
@@ -122,7 +46,7 @@ model WebhookEvent {
   event        String
   payload      String
   attempts     Int           @default(0)
-  status       WebhookStatus @default(PENDING)
+  status       String        @default("PENDING")
   responseCode Int?
   lastAttempt  DateTime?
   createdAt    DateTime      @default(now())
@@ -148,20 +72,20 @@ model WorkflowRule {
 model Session {
   id                 String             @id @default(uuid())
   ticketRef          String?            @unique
-  category           SupportCategory?
-  severity           IssueSeverity      @default(MEDIUM)
-  department         Department?
+  category           String?
+  severity           String             @default("MEDIUM")
+  department         String?
   assignedAgentId    String?
   assignedTeam       String?
   title              String
   description        String?
   createdBy          String
   creator            User               @relation("CreatedSessions", fields: [createdBy], references: [id])
-  status             SessionState       @default(CREATED)
+  status             String             @default("CREATED")
   startedAt          DateTime?
   endedAt            DateTime?
   agentNotes         String?
-  resolutionStatus   ResolutionStatus?
+  resolutionStatus   String?
   feedbackRating     Int?
   feedbackResolved   Boolean?
   feedbackComments   String?
@@ -194,7 +118,7 @@ model Participant {
   user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   displayName String
   email       String?
-  role        Role
+  role        String
   joinedAt    DateTime  @default(now())
   leftAt      DateTime?
   isConnected Boolean   @default(true)
@@ -227,7 +151,7 @@ model Message {
   session      Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   senderId     String
   senderName   String
-  senderRole   Role
+  senderRole   String
   content      String
   createdAt    DateTime      @default(now())
 
@@ -263,7 +187,7 @@ model Recording {
   playbackUrl     String
   durationSeconds Int
   sizeBytes       Int
-  status          RecordingStatus @default(RECORDING)
+  status          String          @default("RECORDING")
   startedAt       DateTime        @default(now())
   endedAt         DateTime?
   createdAt       DateTime        @default(now())
@@ -294,7 +218,7 @@ model SessionSummary {
   sessionId     String   @unique
   session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   durationSec   Int
-  participants  Json     // JSON structure mapping participants: [{ name, role }, ...]
+  participants  String   // JSON structure mapping participants: [{ name, role }, ...]
   totalMessages Int
   totalFiles    Int
   recordingUrl  String?
@@ -319,8 +243,8 @@ model AuditLog {
   user      User?            @relation(fields: [userId], references: [id])
   sessionId String?
   session   Session?         @relation(fields: [sessionId], references: [id])
-  action    AuditAction
-  payload   Json?
+  action    String
+  payload   String?
   ipAddress String?
   userAgent String?
   createdAt DateTime         @default(now())

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SupportCategory, IssueSeverity, Department, ResolutionStatus } from '@prisma/client';
+import { SupportCategory, IssueSeverity, Department, ResolutionStatus } from '@supportstream/shared-types';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { SubmitFeedbackDto } from './dto/submit-feedback.dto';
 import { AIService } from './ai.service';
@@ -822,11 +822,11 @@ export class SessionsService implements OnModuleInit {
     // 3. Create the session in the DB
     const mappedCategory = (category || 'TECHNICAL_SUPPORT') as SupportCategory;
     
-    let mappedDept: Department = Department.TECHNICAL_SUPPORT;
-    if (category === 'BILLING') mappedDept = Department.BILLING;
-    else if (category === 'ACCOUNT_RECOVERY') mappedDept = Department.ACCOUNT_RECOVERY;
-    else if (category === 'PRODUCT_DEMO' || category === 'SALES') mappedDept = Department.SALES;
-    else if (category === 'ESCALATION') mappedDept = Department.ESCALATIONS;
+    let mappedDept: Department = 'TECHNICAL_SUPPORT';
+    if (category === 'BILLING') mappedDept = 'BILLING';
+    else if (category === 'ACCOUNT_RECOVERY') mappedDept = 'ACCOUNT_RECOVERY';
+    else if (category === 'PRODUCT_DEMO' || category === 'SALES') mappedDept = 'SALES';
+    else if (category === 'ESCALATION') mappedDept = 'ESCALATIONS';
 
     const session = await this.prisma.session.create({
       data: {
